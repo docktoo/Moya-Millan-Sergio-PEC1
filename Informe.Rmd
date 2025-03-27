@@ -1,0 +1,45 @@
+---
+title: "Informe PEC1"
+author: "Sergio Moya Millan"
+date: "2025-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Seleccionad y descargad un dataset de metabolómica, que podéis obtener demetabolomicsWorkbench o de este repositorio de GitHub.
+He sleccionado el archivo mas actual del repositorio
+```{r}
+#Ponemos de directorio la carpeta con los datasets
+setwd("~/Moya-Millan-Sergio-PEC1")
+```
+
+# 2.1. Cread un objeto de clase SummarizedExperiment que contenga los datos y los metadatos (información acerca del dataset, sus filas y columnas).
+
+```{r}
+# Cargar paquetes necesarios
+library(SummarizedExperiment)
+library(readr)
+library(readxl)
+library(dplyr)
+#Ponemos de directorio la carpeta con los datasets
+setwd("~/metaboData/Datasets/2024-fobitools-UseCase_1")
+
+# Cargar los datos desde los archivos CSV y Excel
+features <- read_excel("ST000291curated.xlsx", sheet = 1) # Información sobre las características (metabolitos)
+metabolite_names <- read_excel("ST000291curated.xlsx", sheet = 3)  # Nombres de metabolitos
+metadata <- read_excel("ST000291curated.xlsx", sheet = 2)  # Metadatos de las muestras
+
+#convertir a numerico porque me lo detecta como caracter
+features[] <- lapply(features, function(x) as.numeric(as.character(x)))
+# Convertir solo la segunda columna (PubChemID) a numérico
+metabolite_names$PubChemID <- as.numeric(metabolite_names$PubChemID)
+# Revisar las primeras filas de cada dataset para entender su estructura
+head(features)
+head(metabolite_names)
+head(metadata)
+
+str(metadata)
+```
