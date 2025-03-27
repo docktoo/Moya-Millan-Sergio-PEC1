@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # 1. Seleccionad y descargad un dataset de metabolómica, que podéis obtener demetabolomicsWorkbench o de este repositorio de GitHub.
-He sleccionado el archivo mas actual del repositorio
+He seleccionado el archivo más actual del repositorio
 ```{r}
 #Ponemos de directorio la carpeta con los datasets
 setwd("~/Moya-Millan-Sergio-PEC1")
@@ -42,4 +42,132 @@ head(metabolite_names)
 head(metadata)
 
 str(metadata)
+```
+
+Una vez tenemos la estrucutra general procedemos a hacer el objteo de clase SummarizedExperiment
+
+```{r}
+# 1. Reorganizar la matriz de datos
+# La primera columna de `features` es `PubChemID`, que será el identificador de metabolitos.
+# Las siguientes columnas son los valores de las mediciones para las diferentes muestras.
+
+# Crear la matriz de datos: quitar la primera columna de PubChemID y convertir el resto en una matriz
+data_matrix <- as.matrix(features[, -1])  # Eliminar la columna 'PubChemID'
+
+
+# Unir la información de los metabolitos con los nombres
+row_metadata <- DataFrame(
+  MetaboliteName = metabolite_names$names,  # Nombre del metabolito
+  PubChemID = features$PubChemID  # Identificador PubChem
+)
+
+# 3. Crear los metadatos de las columnas (información sobre las muestras)
+col_metadata <- DataFrame(sampleID = metadata$sampleID, Treatment = metadata$Treatment)
+
+
+# 4. Crear el objeto SummarizedExperiment
+se_object <- SummarizedExperiment(
+  assays = list(counts = data_matrix),  # Usamos `data_matrix` como los datos de expresión
+  rowData = row_metadata,  # Metadatos de las filas (identificadores de metabolitos)
+  colData = col_metadata   # Metadatos de las columnas (información de las muestras)
+)
+
+# Verificar la estructura del objeto SummarizedExperiment
+se_object
+
+# Ver las primeras filas de los metadatos de las filas y columnas
+head(rowData(se_object))
+head(colData(se_object))
+```
+
+# 2.2. La clase SummarizedExperiment es una extensión de ExpressionSet, utilizada por muchas aplicaciones y bases de datos (como es el caso de metabolomicsWorkbench). ¿Cuáles son sus principales diferencias con la clase ExpressionSet?
+
+La clase SummarizedExperiment y la clase ExpressionSet son estructuras de datos utilizadas para almacenar y analizar datos biológicos, pero con diferencias clave en su flexibilidad y capacidad de manejo de datos. Mientras que ExpressionSet está diseñada principalmente para datos de expresión génica, como los obtenidos de microarrays o RNA-Seq, con una estructura rígida que almacena los datos en un solo objeto, SummarizedExperiment es más generalizada y flexible. Esta última permite almacenar múltiples tipos de datos experimentales en su slot assays, lo que la hace ideal para trabajar con datos de diferentes plataformas y tecnologías, como metabolómica, proteómica y transcriptómica.
+
+Además, SummarizedExperiment mejora la gestión de metadatos al permitir el uso de objetos tipo DataFrame en los slots rowData y colData, lo que facilita la integración de información detallada sobre las filas y columnas. Por otro lado, ExpressionSet utiliza objetos más limitados para almacenar metadatos, lo que puede ser un inconveniente cuando se necesita gestionar datos complejos. En resumen, mientras que ExpressionSet sigue siendo útil en análisis genéticos tradicionales, SummarizedExperiment ofrece una mayor flexibilidad y escalabilidad, siendo más adecuada para estudios complejos y multidimensionales en biología.
+
+# 3. Llevad a cabo un análisis exploratorio que os proporcione una visión general del dataset en la línea de lo que hemos visto en las actividades de este reto.
+
+```{r}
+# Inspeccionar las dimensiones de los datos
+cat("Dimensiones de data_matrix: ", dim(data_matrix), "\n")
+cat("Dimensiones de row_metadata: ", dim(row_metadata), "\n")
+cat("Dimensiones de col_metadata: ", dim(col_metadata), "\n")
+
+# Revisar los tipos de las columnas en los metadatos
+str(row_metadata)
+str(col_metadata)
+
+# Comprobamos si hay valores faltantes en el data_matrix
+sum(is.na(data_matrix))  # Número total de valores NA en la matriz de datos
+
+# Verificamos si hay valores faltantes en los metadatos
+sum(is.na(row_metadata$PubChemID))  # Verificar en row_metadata
+sum(is.na(col_metadata$sampleID))  # Verificar en col_metadata
+
+# Identificar filas con valores NA
+na_rows <- which(rowSums(is.na(data_matrix)) > 0)
+# Identificar las filas con valores NA en 'PubChemID'
+na_rows <- which(is.na(row_metadata$PubChemID))
+# Mostrar las filas con valores NA
+cat("Filas con valores NA: ", na_rows, "\n")
+
+# Al revisar las filas me di cuenta que en el dataset original estas no exisitian asi que procedo a eliminarlas
+# Eliminar filas con valores faltantes
+data_matrix <- data_matrix[rowSums(is.na(data_matrix)) == 0, ]
+row_metadata <- row_metadata[!is.na(row_metadata$PubChemID), ]
+
+```
+
+data_matrix tiene dimensiones 1541 filas (metabolitos) por 45 columnas (muestras).
+
+row_metadata tiene 1541 filas, lo que corresponde al número de metabolitos, y contiene una columna llamada PubChemID, que parece ser el identificador único para cada metabolito y la columna Metabolitename que es el nombre del metabolito.
+
+col_metadata tiene 45 filas, correspondientes a las muestras, con dos columnas: sampleID (ID de muestra) y Treatment (tratamiento correspondiente).
+
+```{r}
+# Revisión de estadísticas descriptivas
+# Estadísticas descriptivas de los datos de expresión
+summary(data_matrix)
+
+# Estadísticas descriptivas por metabolito
+apply(data_matrix, 1, summary)
+
+# Estadísticas descriptivas por muestra
+apply(data_matrix, 2, summary)
+```
+
+```{r}
+# heatmap es útil para ver cómo varían los valores de los metabolitos a través de las muestras.
+library(pheatmap)
+pheatmap(data_matrix, 
+         scale = "row",  # Escalar los metabolitos
+         show_rownames = FALSE,  # Opcional: ocultar los nombres de los metabolitos
+         show_colnames = TRUE)  # Mostrar los nombres de las muestras
+
+```
+
+```{r}
+# Boxplot para observar la distribución de los datos de expresión por muestra
+boxplot(data_matrix, 
+        main = "Distribución de los metabolitos por muestra", 
+        las = 2,  # Rotar las etiquetas de las muestras
+        col = "lightblue")
+```
+a
+
+```{r}
+library(ggplot2)
+# Transponer data_matrix para que las filas sean muestras y las columnas sean metabolitos
+data_plot <- as.data.frame(t(data_matrix))
+
+# Agregar la información de tratamiento desde col_metadata
+data_plot$Treatment <- col_metadata$Treatment
+
+ggplot(data_plot, aes(x = V1, y = V2, color = Treatment)) + 
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Relación entre metabolitos por tratamiento",
+       x = "Metabolito 1 (V1)", 
+       y = "Metabolito 2 (V2)")
 ```
