@@ -1,0 +1,232 @@
+---
+title: "Script PEC1"
+author: "Sergio Moya Millan"
+date: "2025-03-27"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Seleccionad y descargad un dataset de metabolómica, que podéis obtener demetabolomicsWorkbench o de este repositorio de GitHub.
+
+
+```{r}
+#Ponemos de directorio la carpeta con los datasets
+setwd("~/Moya-Millan-Sergio-PEC1")
+```
+
+# 2.1. Cread un objeto de clase SummarizedExperiment que contenga los datos y los metadatos (información acerca del dataset, sus filas y columnas).
+
+```{r}
+# Cargar paquetes necesarios
+library(SummarizedExperiment)
+library(readr)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+
+# Cargar los datos
+data <- read_csv("C:/Users/sergio/Documents/Moya-Millan-Sergio-PEC1/human_cachexia.csv")  
+
+# Verificar las primeras filas de los datos
+head(data)
+
+# Separar los metadatos y los datos de los metabolitos
+metadata <- as.data.frame(data[, 1:2])  # Tomamos las dos primeras columnas: Patient ID y Muscle loss
+metabolites <- as.data.frame(data[, -c(1, 2)])  # El resto de las columnas son los metabolitos
+
+# Verificar las dimensiones de los datos
+print(dim(metabolites))  # Debe mostrar (77, 63)
+print(dim(metadata))  # Debe mostrar (77, 2)
+
+# Asignar los nombres de las filas a la matriz de metabolitos
+rownames(metabolites) <- metadata$`Patient ID`
+rownames(metadata) <- metadata$`Patient ID`
+
+# Transponer la matriz de metabolitos para que las columnas sean las muestras
+metabolites_t <- t(metabolites)
+
+# Verificar la transposición 
+print(dim(metabolites_t))  # Debería ser 63 metabolitos y 77 pacientes
+
+# Crear correctamente colData con los metadatos (debe tener un DataFrame con las columnas de información de pacientes)
+colData <- DataFrame(PatientID = metadata$`Patient ID`, MuscleLoss = metadata$`Muscle loss`)
+
+# Verificar colData
+head(colData)
+
+# Crear el objeto SummarizedExperiment con los metabolitos transpuestos y los metadatos
+se <- SummarizedExperiment(
+  assays = list(counts = as.matrix(metabolites_t)),  # Los datos de los metabolitos
+  colData = colData  # Los metadatos (información de los pacientes)
+)
+
+# Ver el objeto SummarizedExperiment
+se
+
+# Ver los metadatos del objeto SummarizedExperiment
+colData(se)
+
+# Ver las primeras filas de los datos de metabolitos
+head(assay(se))  # Muestra los primeros metabolitos para cada paciente
+
+# Resumen del objeto SummarizedExperiment, que ahora debería incluir los metadatos
+summary(se)
+summary(colData(se))
+colData(se)
+table(colData(se)$MuscleLoss)
+summary(assay(se))
+```
+
+
+```{r}
+# Crear una función para generar un gráfico por metabolito
+create_plot <- function(metabolito_data, metabolito_name) {
+  ggplot(metabolito_data, aes(x = MuscleLoss, y = Metabolito, fill = MuscleLoss)) +
+    geom_boxplot() +
+    xlab('Muscle Loss') +
+    ylab('Nivel de Metabolito') +
+    ggtitle(paste('Distribución de', metabolito_name)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+# Dividir los metabolitos en 9 grupos
+metabolitos_lista <- unique(df_metabolitos$MetabolitoNombre)
+grupos <- split(metabolitos_lista, ceiling(seq_along(metabolitos_lista) / (length(metabolitos_lista) / 10)))
+
+# Crear los gráficos para cada grupo
+plots_per_group <- lapply(grupos, function(metabolitos) {
+  # Para cada grupo de metabolitos, crear un gráfico
+  plots <- lapply(metabolitos, function(metabolito_name) {
+    metabolito_data <- df_metabolitos[df_metabolitos$MetabolitoNombre == metabolito_name, ]
+    create_plot(metabolito_data, metabolito_name)
+  })
+  # Regresar el conjunto de gráficos
+  do.call(grid.arrange, c(plots, ncol = 3))  
+})
+``` 
+
+# 2.2. La clase SummarizedExperiment es una extensión de ExpressionSet, utilizada por muchas aplicaciones y bases de datos (como es el caso de metabolomicsWorkbench). ¿Cuáles son sus principales diferencias con la clase ExpressionSet?
+
+La clase SummarizedExperiment y la clase ExpressionSet son estructuras de datos utilizadas para almacenar y analizar datos biológicos, pero con diferencias clave en su flexibilidad y capacidad de manejo de datos. Mientras que ExpressionSet está diseñada principalmente para datos de expresión génica, como los obtenidos de microarrays o RNA-Seq, con una estructura rígida que almacena los datos en un solo objeto, SummarizedExperiment es más generalizada y flexible. Esta última permite almacenar múltiples tipos de datos experimentales en su slot assays, lo que la hace ideal para trabajar con datos de diferentes plataformas y tecnologías, como metabolómica, proteómica y transcriptómica.
+
+Además, SummarizedExperiment mejora la gestión de metadatos al permitir el uso de objetos tipo DataFrame en los slots rowData y colData, lo que facilita la integración de información detallada sobre las filas y columnas. Por otro lado, ExpressionSet utiliza objetos más limitados para almacenar metadatos, lo que puede ser un inconveniente cuando se necesita gestionar datos complejos. En resumen, mientras que ExpressionSet sigue siendo útil en análisis genéticos tradicionales, SummarizedExperiment ofrece una mayor flexibilidad y escalabilidad, siendo más adecuada para estudios complejos y multidimensionales en biología.
+
+# 3. Llevad a cabo un análisis exploratorio que os proporcione una visión general del dataset en la línea de lo que hemos visto en las actividades de este reto.
+```{r}
+# Extraer los datos de los metabolitos y los metadatos
+metabolite_data <- assay(se)
+patient_info <- colData(se)
+
+# Realizar pruebas t para cada metabolito entre los grupos de pérdida muscular
+muscle_loss_groups <- unique(patient_info$MuscleLoss)
+t_test_results <- data.frame(Metabolite = rownames(metabolite_data), t_statistic = NA, p_value = NA)
+
+for (i in 1:nrow(metabolite_data)) {
+  metabolite_values <- metabolite_data[i, ]
+  group1 <- metabolite_values[patient_info$MuscleLoss == muscle_loss_groups[1]]
+  group2 <- metabolite_values[patient_info$MuscleLoss == muscle_loss_groups[2]]
+  
+  t_test <- t.test(group1, group2)
+  t_test_results$t_statistic[i] <- t_test$statistic
+  t_test_results$p_value[i] <- t_test$p.value
+}
+
+# Filtrar los metabolitos significativos (p-valor < 0.05)
+significant_metabolites <- t_test_results %>% filter(p_value < 0.05)
+
+# Mostrar los resultados
+print(t_test_results)
+print(significant_metabolites)
+
+# Crear diagramas de caja para los metabolitos significativos
+for (metabolite in significant_metabolites$Metabolite) {
+  boxplot_data <- data.frame(
+    MuscleLoss = patient_info$MuscleLoss,
+    MetaboliteValue = metabolite_data[metabolite, ]
+  )
+  
+  p <- ggplot(boxplot_data, aes(x = MuscleLoss, y = MetaboliteValue)) +
+    geom_boxplot() +
+    labs(title = paste("Boxplot of", metabolite, "by Muscle Loss"), x = "Muscle Loss", y = metabolite) +
+    theme_minimal()
+  
+  print(p)
+}
+```
+
+```{r}
+# Instalar DESeq2 desde Bioconductor
+BiocManager::install("DESeq2")
+library(ggplot2)
+library(reshape2)
+library(DESeq2)
+library(pheatmap)
+library(dplyr)
+# Paso 4: Análisis de correlación entre metabolitos
+# Calcula la matriz de correlación
+metabolitos_data <- assay(se)
+correl_matrix <- cor(t(metabolitos_data))
+
+# Visualiza la matriz de correlación como un heatmap
+correl_matrix_melted <- melt(correl_matrix)
+ggplot(correl_matrix_melted, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle('Matriz de Correlación de Metabolitos')
+
+# PCA (Análisis de Componentes Principales) para explorar la separación entre grupos
+pca <- prcomp(t(assay(se)), scale = TRUE)
+pca_data <- as.data.frame(pca$x)
+pca_data$MuscleLoss <- colData(se)$MuscleLoss
+# Obtener los eigenvalores
+eigenvalues <- pca$sdev^2
+
+# Ver los valores
+print(eigenvalues)
+
+# Crear un gráfico de varianza explicada 
+variance_explained <- eigenvalues / sum(eigenvalues) * 100
+
+# Graficar la varianza explicada por cada componente
+barplot(variance_explained, main = "Varianza Explicada por cada Componente",
+        xlab = "Componentes Principales", ylab = "Varianza Explicada (%)",
+        col = "skyblue", names.arg = 1:length(eigenvalues))
+cumulative_variance <- cumsum(variance_explained)
+print(cumulative_variance)
+plot(variance_explained, type = "b", main = "Scree Plot",
+     xlab = "Componentes Principales", ylab = "Varianza Explicada (%)",
+     pch = 19, col = "blue")
+abline(h = 80, col = "red", lty = 2)
+
+# Calcular PCA
+pca <- prcomp(t(assay(se)), scale = TRUE)
+
+# Visualizar el PCA
+ggplot(pca_data, aes(x = PC1, y = PC2, color = MuscleLoss)) +
+  geom_point() +
+  ggtitle('PCA de Metabolitos') +
+  xlab('PC1') + ylab('PC2')
+
+# Acceder a las cargas de los componentes principales
+pca_loadings <- pca$rotation
+# Ver las primeras filas de las cargas
+head(pca_loadings)
+```
+```{r}
+# Guardar el objeto summaryzed
+save(se, file="objeto.Rda")
+write.table(assay(se), file = "datos.txt", sep = "\t", row.names = FALSE, col.names = TRUE)
+write.csv(colData(se), file = "metadatos.csv", row.names = FALSE)
+```
+
+
+
+
+
+
