@@ -1,42 +1,14 @@
----
-title: "Script PEC1"
-author: "Sergio Moya Millan"
-date: "2025-03-27"
-output:
-  word_document: default
-  html_document: default
----
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-# 1. Seleccionad y descargad un dataset de metabolómica, que podéis obtener demetabolomicsWorkbench o de este repositorio de GitHub.
-
-
-```{r}
-#Ponemos de directorio la carpeta con los datasets
-setwd("~/Moya-Millan-Sergio-PEC1")
-```
-
-# 2.1. Cread un objeto de clase SummarizedExperiment que contenga los datos y los metadatos (información acerca del dataset, sus filas y columnas).
-
-```{r}
-# Cargar paquetes necesarios
+# Cargar las librerías necesarias
 library(SummarizedExperiment)
 library(readr)
-library(readxl)
-library(dplyr)
 library(ggplot2)
+library(e1071)  # Para calcular la asimetría
+library(dplyr)
 library(tidyr)
 library(reshape2)
-library(pheatmap)
-
-# Cargar los datos
-data <- read_csv("C:/Users/sergio/Documents/Moya-Millan-Sergio-PEC1/human_cachexia.csv")  
-
-# Verificar las primeras filas de los datos
-head(data)
+library(pheatmap) 
+# Leer el archivo CSV
+data <- read_csv("~/Moya-Millan-Sergio-PEC1/human_cachexia.csv")
 
 # Separar los metadatos y la matriz de datos de metabolitos
 metadata <- data %>% select(`Patient ID`, `Muscle loss`)
@@ -75,56 +47,35 @@ ggplot(metabolites_log_long, aes(x = Metabolite, y = Value)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5))  
 
-# Escalar (promedio = 0, desviación estándar = 1)
+# Realizar el escalado automático de los metabolitos
+# Estándar: centrado y escalado (promedio = 0, desviación estándar = 1)
 metabolites_scaled <- scale(metabolites_log)
 
 # Transponer la matriz de metabolitos para que las columnas sean las muestras
 metabolites_t_scaled <- t(metabolites_scaled)
 
 # Crear el objeto SummarizedExperiment
-se <- SummarizedExperiment(
-  assays = list(counts = as.matrix(metabolites_t_scaled)),  
-  colData = DataFrame(metadata)  
+ses <- SummarizedExperiment(
+  assays = list(counts = as.matrix(metabolites_t_scaled)),  # Convertir metabolitos escalados en matriz
+  colData = DataFrame(metadata)  # Convertir metadatos en DataFrame
 )
 
+# Mostrar el objeto SummarizedExperiment
+ses
+str(ses)
 
-# Ver el objeto SummarizedExperiment
-se
+# Extraer los datos de los ensayos y la información de los grupos
+counts <- assays(ses)$counts
+group <- colData(ses)$Muscle.loss
 
-# Ver los metadatos del objeto SummarizedExperiment
-colData(se)
-
-colnames(colData(se))
-# Ver las primeras filas de los datos de metabolitos
-head(assay(se))  
-
-# Resumen del objeto SummarizedExperiment
-summary(assay(se))
-
-# Estructura
-str(se)
-```
-
-# 2.2. La clase SummarizedExperiment es una extensión de ExpressionSet, utilizada por muchas aplicaciones y bases de datos (como es el caso de metabolomicsWorkbench). ¿Cuáles son sus principales diferencias con la clase ExpressionSet?
-
-La clase SummarizedExperiment y la clase ExpressionSet son estructuras de datos utilizadas para almacenar y analizar datos biológicos, pero con diferencias clave en su flexibilidad y capacidad de manejo de datos. Mientras que ExpressionSet está diseñada principalmente para datos de expresión génica, como los obtenidos de microarrays o RNA-Seq, con una estructura rígida que almacena los datos en un solo objeto, SummarizedExperiment es más generalizada y flexible. Esta última permite almacenar múltiples tipos de datos experimentales en su slot assays, lo que la hace ideal para trabajar con datos de diferentes plataformas y tecnologías, como metabolómica, proteómica y transcriptómica.
-
-Además, SummarizedExperiment mejora la gestión de metadatos al permitir el uso de objetos tipo DataFrame en los slots rowData y colData, lo que facilita la integración de información detallada sobre las filas y columnas. Por otro lado, ExpressionSet utiliza objetos más limitados para almacenar metadatos, lo que puede ser un inconveniente cuando se necesita gestionar datos complejos. En resumen, mientras que ExpressionSet sigue siendo útil en análisis genéticos tradicionales, SummarizedExperiment ofrece una mayor flexibilidad y escalabilidad, siendo más adecuada para estudios complejos y multidimensionales en biología.
-
-# 3. Llevad a cabo un análisis exploratorio que os proporcione una visión general del dataset en la línea de lo que hemos visto en las actividades de este reto.
-```{r}
-# Extrae los datos de los ensayos y la información de los grupos
-counts <- assays(se)$counts
-group <- colData(se)$Muscle.loss
-
-# Crea un data frame para almacenar los resultados de las pruebas t
+# Crear un data frame para almacenar los resultados de las pruebas t
 results <- data.frame(
   Feature = rownames(counts),
   t_statistic = numeric(nrow(counts)),
   p_value = numeric(nrow(counts))
 )
 
-# Realizar pruebas t 
+# Realizar pruebas t para cada característica
 for (i in 1:nrow(counts)) {
   feature_data <- counts[i, ]
   t_test <- t.test(feature_data ~ group)
@@ -132,24 +83,25 @@ for (i in 1:nrow(counts)) {
   results$p_value[i] <- t_test$p.value
 }
 
-# Ajusta los valores p
+# Ajustar los valores p para el control de la tasa de falsos descubrimientos (FDR)
 results$adjusted_p_value <- p.adjust(results$p_value, method = "fdr")
 
-# Muestra los resultados
+# Mostrar los resultados
 print(results)
-
 # Filtrar los 10 metabolitos más significativos por valor p ajustado
 top_10_metabolites <- results[order(results$adjusted_p_value), ][1:10, ]
 
 # Ver los primeros 10 metabolitos
 print(top_10_metabolites)
-```
 
-```{r}
+
+# Extraer los datos de los metabolitos (matriz de expresión)
+metabolite_data <- assay(se)
+
 # Transponer la matriz de metabolitos para que las filas sean metabolitos y las columnas muestras
-metabolite_data_transposed <- t(counts)
+metabolite_data_transposed <- t(metabolite_data)
 
-# Calcular la matriz de correlación entre los metabolitos
+# Calcular la matriz de correlación entre las filas (ahora metabolitos)
 cor_matrix <- cor(metabolite_data_transposed, method = "pearson")
 
 # Generar el heatmap para las correlaciones entre los metabolitos
@@ -160,31 +112,31 @@ pheatmap(cor_matrix,
          main = "Mapa de calor de correlaciones entre metabolitos",
          display_numbers = FALSE,  # No mostrar los números de las correlaciones
          fontsize = 10,            # Tamaño de la fuente
-         scale = "none")           # No escalar los datos
+         scale = "none")           # No escalar los 
 
+summary(cor_matrix)
 # Convertir la matriz de correlación en un data frame
 cor_df <- as.data.frame(as.table(cor_matrix))
 
 # Filtrar la diagonal principal y duplicados
 cor_df <- cor_df[cor_df$Var1 != cor_df$Var2, ]
 
-# Ordenar por valores absolutos de correlación 
+# Ordenar por valores absolutos de correlación (de mayor a menor)
 cor_df <- cor_df[order(abs(cor_df$Freq), decreasing = TRUE), ]
 
 # Ver los pares de metabolitos más correlacionados
-head(cor_df, 10)  
-```
-```{r}
+head(cor_df, 10)  # Muestra los 10 pares más correlacionados
+
 # Calcular la matriz de distancias euclidianas entre los metabolitos
 distance_matrix <- dist(metabolite_data_transposed, method = "euclidean")
 
 # Realizar el agrupamiento jerárquico usando el método de enlace completo
 hc <- hclust(distance_matrix, method = "complete")
 
-# Visualizar el dendrograma 
+# Visualizar el dendrograma (agrupamiento jerárquico)
 plot(hc, main = "Dendrograma de Agrupamiento Jerárquico", 
      xlab = "Metabolitos", ylab = "Distancia Euclidiana", 
-     cex = 0.7) 
+     cex = 0.7)  # Ajusta el tamaño de los labels si es necesario
 
 # Calcular la suma de los cuadrados dentro de los clusters (WSS) para diferentes valores de K
 set.seed(42)
@@ -195,14 +147,11 @@ wss
 plot(1:10, wss, type = "b", pch = 19, frame = FALSE,
      xlab = "Número de Clusters K", ylab = "Suma de los cuadrados dentro del cluster",
      main = "Método del Codo")
-# Cortar el dendrograma en 4 clusters
-clusters <- cutree(hc, k = 4)
-clusters
-```
-```{r}
+
 # Realizar PCA sobre la matriz de metabolitos
 pca <- prcomp(t(counts))  # Transponer 'counts' para que las muestras sean las observaciones
 
+# Crear un data frame con las coordenadas PCA y las etiquetas de los clusters
 pca_data <- data.frame(pca$x)
 pca_data$Cluster <- factor(clusters)  # Asignar los clusters como factor
 
@@ -212,19 +161,3 @@ ggplot(pca_data, aes(x = PC1, y = PC2, color = Cluster)) +
   geom_point(size = 3) +
   labs(title = "PCA con 4 Clusters", x = "Componente Principal 1", y = "Componente Principal 2") +
   theme_minimal()
-```
-
-
-
-```{r}
-# Guardar el objeto summaryzed
-save(se, file="objeto.Rda")
-write.table(assay(se), file = "datos.txt", sep = "\t", row.names = FALSE, col.names = TRUE)
-write.csv(colData(se), file = "metadatos.csv", row.names = FALSE)
-```
-
-
-
-
-
-
