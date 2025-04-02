@@ -30,7 +30,7 @@ library(dplyr)
 library(ggplot2)
 
 # Cargar los datos
-data <- read_csv("C:/Users/sergio/Documents/Moya-Millan-Sergio-PEC1/human_cachexia.csv")  # Cambia la ruta al archivo
+data <- read_csv("C:/Users/sergio/Documents/Moya-Millan-Sergio-PEC1/human_cachexia.csv")  
 
 # Verificar las primeras filas de los datos
 head(data)
@@ -50,8 +50,8 @@ rownames(metadata) <- metadata$`Patient ID`
 # Transponer la matriz de metabolitos para que las columnas sean las muestras
 metabolites_t <- t(metabolites)
 
-# Verificar que la transposición ha sido exitosa
-print(dim(metabolites_t))  # Debería ser (63, 77), es decir, 63 metabolitos y 77 pacientes
+# Verificar la transposición 
+print(dim(metabolites_t))  # Debería ser 63 metabolitos y 77 pacientes
 
 # Crear correctamente colData con los metadatos (debe tener un DataFrame con las columnas de información de pacientes)
 colData <- DataFrame(PatientID = metadata$`Patient ID`, MuscleLoss = metadata$`Muscle loss`)
@@ -106,7 +106,7 @@ plots_per_group <- lapply(grupos, function(metabolitos) {
     create_plot(metabolito_data, metabolito_name)
   })
   # Regresar el conjunto de gráficos
-  do.call(grid.arrange, c(plots, ncol = 3))  # Puedes ajustar ncol para cambiar la cantidad de columnas por página
+  do.call(grid.arrange, c(plots, ncol = 3))  
 })
 ``` 
 
@@ -180,7 +180,7 @@ ggplot(correl_matrix_melted, aes(Var1, Var2, fill = value)) +
   theme(axis.text.x = element_text(angle = 90)) +
   ggtitle('Matriz de Correlación de Metabolitos')
 
-# Paso 5: PCA (Análisis de Componentes Principales) para explorar la separación entre grupos
+# PCA (Análisis de Componentes Principales) para explorar la separación entre grupos
 pca <- prcomp(t(assay(se)), scale = TRUE)
 pca_data <- as.data.frame(pca$x)
 pca_data$MuscleLoss <- colData(se)$MuscleLoss
@@ -190,7 +190,7 @@ eigenvalues <- pca$sdev^2
 # Ver los valores
 print(eigenvalues)
 
-# Crear un gráfico de varianza explicada (Scree Plot)
+# Crear un gráfico de varianza explicada 
 variance_explained <- eigenvalues / sum(eigenvalues) * 100
 
 # Graficar la varianza explicada por cada componente
